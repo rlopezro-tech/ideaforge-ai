@@ -23,7 +23,7 @@ const initialForm: FormState = {
 
 function buildUrl(form: FormState) {
   const params = new URLSearchParams(form);
-  return `/api/idea?${params.toString()}`;
+  return `/api?${params.toString()}`;
 }
 
 export default function Home() {

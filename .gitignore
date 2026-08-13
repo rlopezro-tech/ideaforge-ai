@@ -1,0 +1,10 @@
+.DS_Store
+.env
+.env.local
+.vercel
+.venv
+.next
+node_modules
+__pycache__
+*.pyc
+*.tsbuildinfo

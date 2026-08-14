@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.39.0",
+    "@microsoft/fetch-event-source": "^2.0.1",
     "lucide-react": "^0.475.0",
     "next": "^16.3.0",
     "react": "^19.0.0",

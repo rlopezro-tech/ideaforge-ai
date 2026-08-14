@@ -3,11 +3,31 @@ import os
 import time
 from typing import Iterable
 
-from fastapi import FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer, HTTPAuthorizationCredentials
 from openai import OpenAI, OpenAIError
+from dotenv import load_dotenv
+
+load_dotenv(".env.local")
+load_dotenv(".env")
 
 app = FastAPI(title="IdeaForge AI API")
+clerk_guard: ClerkHTTPBearer | None = None
+
+
+async def require_clerk_auth(request: Request) -> HTTPAuthorizationCredentials:
+    global clerk_guard
+
+    jwks_url = os.getenv("CLERK_JWKS_URL")
+    if not jwks_url:
+        raise HTTPException(status_code=500, detail="CLERK_JWKS_URL is not configured")
+
+    if clerk_guard is None:
+        clerk_config = ClerkConfig(jwks_url=jwks_url)
+        clerk_guard = ClerkHTTPBearer(clerk_config)
+
+    return await clerk_guard(request)
 
 
 def sse_message(text: str, event: str | None = None) -> str:
@@ -108,11 +128,13 @@ def resilient_idea(audience: str, industry: str, constraint: str, language: str)
 @app.get("/api")
 @app.get("/api/idea")
 def idea(
+    creds: HTTPAuthorizationCredentials = Depends(require_clerk_auth),
     audience: str = Query("fundadores no tecnicos", max_length=120),
     industry: str = Query("automatizacion para negocios locales", max_length=140),
     constraint: str = Query("validable en 14 dias", max_length=120),
     language: str = Query("espanol", pattern="^(espanol|english)$"),
 ):
+    _user_id = creds.decoded["sub"]
     return StreamingResponse(
         resilient_idea(audience, industry, constraint, language),
         media_type="text/event-stream",

@@ -3,17 +3,37 @@ import os
 import time
 from typing import Iterable
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi_clerk_auth import ClerkConfig, ClerkHTTPBearer, HTTPAuthorizationCredentials
 from openai import OpenAI, OpenAIError
-from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 
 load_dotenv(".env.local")
 load_dotenv(".env")
 
-app = FastAPI(title="IdeaForge AI API")
+app = FastAPI(title="MediNotes Pro API")
 clerk_guard: ClerkHTTPBearer | None = None
+
+
+class Visit(BaseModel):
+    patient_name: str = Field(min_length=1, max_length=120)
+    date_of_visit: str = Field(min_length=1, max_length=40)
+    notes: str = Field(min_length=1, max_length=6000)
+
+
+SYSTEM_PROMPT = """
+You are provided with notes written by a doctor from a patient's visit.
+Your job is to summarize the visit for the doctor and provide an email.
+Reply with exactly three sections with the headings:
+### Summary of visit for the doctor's records
+### Next steps for the doctor
+### Draft of email to patient in patient-friendly language
+
+Do not invent diagnoses, test results, or treatments that are not present in the notes.
+Keep the patient email clear, concise, and non-alarming.
+"""
 
 
 async def require_clerk_auth(request: Request) -> HTTPAuthorizationCredentials:
@@ -35,75 +55,51 @@ def sse_message(text: str, event: str | None = None) -> str:
     return f"{prefix}data: {json.dumps(text)}\n\n"
 
 
-def fallback_idea(audience: str, industry: str, constraint: str, language: str) -> Iterable[str]:
-    if language == "english":
-        content = f"""# IdeaForge Opportunity
+def user_prompt_for(visit: Visit) -> str:
+    return f"""Create the summary, next steps, and draft email for:
+Patient Name: {visit.patient_name}
+Date of Visit: {visit.date_of_visit}
+Notes:
+{visit.notes}"""
 
-## Core concept
-An AI operations assistant for {audience} working in {industry}. It turns messy daily requests into prioritized workflows, ready-to-send messages, and measurable follow-up tasks.
 
-## First customer wedge
-- Start with one repetitive workflow with clear ROI.
-- Import customer requests from email, WhatsApp exports, or CSV files.
-- Produce a daily action queue for the operator.
+def fallback_consultation(visit: Visit) -> Iterable[str]:
+    content = f"""### Summary of visit for the doctor's records
 
-## Validation plan
-- Interview 10 operators in the target niche.
-- Build a concierge prototype before automating.
-- Charge for the first pilot if it saves more than 3 hours per week.
+{visit.patient_name} was seen on {visit.date_of_visit}. Consultation notes indicate:
 
-## Constraint
-Design the MVP to be {constraint}.
-"""
-    else:
-        content = f"""# IdeaForge Opportunity
+{visit.notes}
 
-## Concepto central
-Un asistente de operaciones con IA para {audience} dentro de {industry}. Convierte solicitudes desordenadas del dia a dia en flujos priorizados, mensajes listos para enviar y tareas medibles de seguimiento.
+### Next steps for the doctor
 
-## Primer nicho
-- Empezar con un flujo repetitivo y retorno claro.
-- Importar solicitudes desde correo, exportaciones de WhatsApp o archivos CSV.
-- Generar una cola diaria de acciones para el operador.
+- Review the consultation note for clinical completeness.
+- Confirm any diagnosis, medication, or follow-up plan before sharing with the patient.
+- Add any missing exam findings, orders, or return precautions to the medical record.
 
-## Plan de validacion
-- Entrevistar a 10 operadores del nicho.
-- Construir un prototipo concierge antes de automatizar.
-- Cobrar el primer piloto si ahorra mas de 3 horas por semana.
+### Draft of email to patient in patient-friendly language
 
-## Restriccion
-Disenar el MVP para que sea {constraint}.
+Dear {visit.patient_name},
+
+Thank you for coming in for your visit on {visit.date_of_visit}. Based on today's discussion, please follow the care plan reviewed during your appointment. Contact the clinic if your symptoms worsen, if you have new concerns, or if you need clarification about the next steps.
+
+Best,
+Your care team
 """
 
     for token in content.split(" "):
         yield sse_message(token + " ")
-        time.sleep(0.025)
+        time.sleep(0.02)
     yield sse_message("done", event="done")
 
 
-def openai_idea(audience: str, industry: str, constraint: str, language: str) -> Iterable[str]:
+def openai_consultation(visit: Visit) -> Iterable[str]:
     client = OpenAI()
-    prompt = f"""
-Generate one original SaaS business idea using Markdown.
-
-Audience: {audience}
-Industry: {industry}
-Constraint: {constraint}
-Language: {language}
-
-Return:
-- Name
-- Problem
-- Product concept
-- First niche
-- MVP scope
-- Validation plan
-- Monetization
-- One risk
-"""
     stream = client.chat.completions.create(
         model="gpt-5-nano",
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt_for(visit)},
+        ],
         stream=True,
     )
 
@@ -114,29 +110,26 @@ Return:
     yield sse_message("done", event="done")
 
 
-def resilient_idea(audience: str, industry: str, constraint: str, language: str) -> Iterable[str]:
+def resilient_consultation(visit: Visit) -> Iterable[str]:
     if not os.getenv("OPENAI_API_KEY"):
-        yield from fallback_idea(audience, industry, constraint, language)
+        yield from fallback_consultation(visit)
         return
 
     try:
-        yield from openai_idea(audience, industry, constraint, language)
+        yield from openai_consultation(visit)
     except OpenAIError:
-        yield from fallback_idea(audience, industry, constraint, language)
+        yield from fallback_consultation(visit)
 
 
-@app.get("/api")
-@app.get("/api/idea")
-def idea(
+@app.post("/api")
+@app.post("/api/consultation")
+def consultation_summary(
+    visit: Visit,
     creds: HTTPAuthorizationCredentials = Depends(require_clerk_auth),
-    audience: str = Query("fundadores no tecnicos", max_length=120),
-    industry: str = Query("automatizacion para negocios locales", max_length=140),
-    constraint: str = Query("validable en 14 dias", max_length=120),
-    language: str = Query("espanol", pattern="^(espanol|english)$"),
 ):
     _user_id = creds.decoded["sub"]
     return StreamingResponse(
-        resilient_idea(audience, industry, constraint, language),
+        resilient_consultation(visit),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

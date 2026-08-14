@@ -11,29 +11,25 @@ import {
 } from "@clerk/nextjs";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import Head from "next/head";
-import { Clipboard, CreditCard, Lightbulb, Loader2, LogIn, RefreshCw, Sparkles } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import DatePicker from "react-datepicker";
+import {
+  CalendarDays,
+  Clipboard,
+  FileText,
+  Loader2,
+  LogIn,
+  Mail,
+  ShieldCheck,
+  Stethoscope,
+  UserRound
+} from "lucide-react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
-type FormState = {
-  audience: string;
-  industry: string;
-  constraint: string;
-  language: string;
-};
-
-const initialForm: FormState = {
-  audience: "fundadores no tecnicos",
-  industry: "automatizacion para negocios locales",
-  constraint: "validable en 14 dias",
-  language: "espanol"
-};
-
-function buildUrl(form: FormState) {
-  const params = new URLSearchParams(form);
-  return `/api?${params.toString()}`;
+function formatVisitDate(date: Date | null) {
+  return date ? date.toISOString().slice(0, 10) : "";
 }
 
 function SubscriptionFallback() {
@@ -41,12 +37,12 @@ function SubscriptionFallback() {
     <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 md:px-8 lg:px-10">
       <div className="mb-10 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-md bg-ink text-white">
-            <Sparkles size={22} aria-hidden="true" />
+          <div className="grid h-11 w-11 place-items-center rounded-md bg-ocean text-white">
+            <Stethoscope size={22} aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-normal text-ink">IdeaForge AI</h1>
-            <p className="text-sm font-medium text-ink/58">Premium access</p>
+            <h1 className="text-2xl font-black tracking-normal text-ink">MediNotes Pro</h1>
+            <p className="text-sm font-medium text-ink/58">Healthcare professional plan</p>
           </div>
         </div>
         <UserButton showName afterSignOutUrl="/" />
@@ -54,11 +50,13 @@ function SubscriptionFallback() {
 
       <div className="mx-auto w-full max-w-4xl text-center">
         <div className="mx-auto mb-6 grid h-14 w-14 place-items-center rounded-md bg-mint text-ink">
-          <CreditCard size={26} aria-hidden="true" />
+          <ShieldCheck size={26} aria-hidden="true" />
         </div>
-        <h2 className="text-4xl font-black tracking-normal text-ink md:text-5xl">Elige tu plan</h2>
+        <h2 className="text-4xl font-black tracking-normal text-ink md:text-5xl">
+          Healthcare Professional Plan
+        </h2>
         <p className="mx-auto mt-4 max-w-2xl text-base font-medium leading-7 text-ink/64 md:text-lg">
-          Desbloquea generacion ilimitada de ideas SaaS con IA y acceso completo al producto.
+          Streamline patient consultations with AI-powered summaries, action items, and patient communications.
         </p>
 
         <div className="mt-10 rounded-lg border border-ink/10 bg-white/86 p-4 shadow-panel backdrop-blur">
@@ -69,195 +67,186 @@ function SubscriptionFallback() {
   );
 }
 
-function IdeaGenerator() {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [form, setForm] = useState<FormState>(initialForm);
-  const [idea, setIdea] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [errorMessage, setErrorMessage] = useState("");
+function ConsultationForm() {
+  const { getToken } = useAuth();
+  const [patientName, setPatientName] = useState("");
+  const [visitDate, setVisitDate] = useState<Date | null>(new Date());
+  const [notes, setNotes] = useState("");
+  const [output, setOutput] = useState("");
+  const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
-  const canCopy = useMemo(() => idea.trim().length > 0, [idea]);
-
-  const generateIdea = useCallback(
-    async (nextForm: FormState) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setIdea("");
-      setCopied(false);
-      setErrorMessage("");
-      setStatus("loading");
-
-      try {
-        const jwt = await getToken();
-
-        if (!jwt) {
-          setStatus("error");
-          setErrorMessage("Inicia sesion para generar ideas.");
-          return;
-        }
-
-        let buffer = "";
-
-        await fetchEventSource(buildUrl(nextForm), {
-          headers: { Authorization: `Bearer ${jwt}` },
-          signal: controller.signal,
-          onmessage(event) {
-            if (event.event === "done") {
-              setStatus("done");
-              controller.abort();
-              return;
-            }
-
-            try {
-              buffer += JSON.parse(event.data) as string;
-            } catch {
-              buffer += event.data;
-            }
-            setIdea(buffer);
-          },
-          onopen(response) {
-            if (!response.ok) {
-              throw new Error(`La API respondio con HTTP ${response.status}`);
-            }
-            return Promise.resolve();
-          },
-          onerror(error) {
-            throw error;
-          }
-        });
-
-        setStatus("done");
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setStatus("error");
-        setErrorMessage(error instanceof Error ? error.message : "No se pudo conectar con el generador.");
-      }
-    },
-    [getToken]
+  const canSubmit = useMemo(
+    () => patientName.trim().length > 0 && Boolean(visitDate) && notes.trim().length > 0 && !loading,
+    [loading, notes, patientName, visitDate]
   );
+  const canCopy = output.trim().length > 0;
 
-  useEffect(() => {
-    if (isLoaded && isSignedIn && status === "idle") {
-      queueMicrotask(() => void generateIdea(initialForm));
-    }
-
-    return () => abortRef.current?.abort();
-  }, [generateIdea, isLoaded, isSignedIn, status]);
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void generateIdea(form);
-  };
+    abortRef.current?.abort();
 
-  const copyIdea = async () => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let buffer = "";
+
+    setOutput("");
+    setCopied(false);
+    setErrorMessage("");
+    setLoading(true);
+
+    try {
+      const jwt = await getToken();
+
+      if (!jwt) {
+        setErrorMessage("Authentication required.");
+        setLoading(false);
+        return;
+      }
+
+      await fetchEventSource("/api", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`
+        },
+        body: JSON.stringify({
+          patient_name: patientName,
+          date_of_visit: formatVisitDate(visitDate),
+          notes
+        }),
+        onmessage(message) {
+          if (message.event === "done") {
+            setLoading(false);
+            controller.abort();
+            return;
+          }
+
+          try {
+            buffer += JSON.parse(message.data) as string;
+          } catch {
+            buffer += message.data;
+          }
+          setOutput(buffer);
+        },
+        onopen(response) {
+          if (!response.ok) {
+            throw new Error(`The API responded with HTTP ${response.status}.`);
+          }
+          return Promise.resolve();
+        },
+        onclose() {
+          setLoading(false);
+        },
+        onerror(error) {
+          throw error;
+        }
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setErrorMessage(error instanceof Error ? error.message : "Unable to generate the consultation summary.");
+      setLoading(false);
+    }
+  }
+
+  async function copyOutput() {
     if (!canCopy) return;
-    await navigator.clipboard.writeText(idea);
+    await navigator.clipboard.writeText(output);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
-  };
+  }
 
   return (
-    <section className="mx-auto grid min-h-screen w-full max-w-7xl gap-8 px-5 py-6 md:grid-cols-[360px_1fr] md:px-8 lg:px-10">
-      <aside className="flex flex-col justify-between rounded-lg border border-ink/10 bg-white/88 p-5 shadow-panel backdrop-blur md:sticky md:top-6 md:max-h-[calc(100vh-3rem)]">
+    <section className="mx-auto grid min-h-screen w-full max-w-7xl gap-8 px-5 py-6 md:grid-cols-[390px_1fr] md:px-8 lg:px-10">
+      <aside className="flex flex-col justify-between rounded-lg border border-ink/10 bg-white/90 p-5 shadow-panel backdrop-blur md:sticky md:top-6 md:max-h-[calc(100vh-3rem)]">
         <div>
           <div className="mb-7 flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-ink text-white">
-                <Sparkles size={22} aria-hidden="true" />
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-ocean text-white">
+                <Stethoscope size={22} aria-hidden="true" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-2xl font-black tracking-normal text-ink">IdeaForge AI</h1>
-                <p className="text-sm font-medium text-ink/58">Premium SaaS concepts</p>
+                <h1 className="text-2xl font-black tracking-normal text-ink">MediNotes Pro</h1>
+                <p className="text-sm font-medium text-ink/58">Consultation assistant</p>
               </div>
             </div>
             <UserButton showName afterSignOutUrl="/" />
           </div>
 
-          <form className="space-y-5" onSubmit={submit}>
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <label className="block">
-              <span className="mb-2 block text-sm font-bold text-ink">Audiencia</span>
+              <span className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
+                <UserRound size={16} aria-hidden="true" />
+                Patient Name
+              </span>
               <input
                 className="h-11 w-full rounded-md border border-ink/15 bg-paper px-3 text-sm outline-none transition focus:border-ocean focus:ring-2 focus:ring-ocean/20"
-                value={form.audience}
-                onChange={(event) => setForm({ ...form, audience: event.target.value })}
+                placeholder="Jane Smith"
+                required
+                value={patientName}
+                onChange={(event) => setPatientName(event.target.value)}
               />
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-bold text-ink">Industria</span>
-              <input
+              <span className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
+                <CalendarDays size={16} aria-hidden="true" />
+                Date of Visit
+              </span>
+              <DatePicker
                 className="h-11 w-full rounded-md border border-ink/15 bg-paper px-3 text-sm outline-none transition focus:border-ocean focus:ring-2 focus:ring-ocean/20"
-                value={form.industry}
-                onChange={(event) => setForm({ ...form, industry: event.target.value })}
+                dateFormat="yyyy-MM-dd"
+                id="visit-date"
+                onChange={(date: Date | null) => setVisitDate(date)}
+                placeholderText="Select date"
+                required
+                selected={visitDate}
               />
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-bold text-ink">Restriccion</span>
-              <input
-                className="h-11 w-full rounded-md border border-ink/15 bg-paper px-3 text-sm outline-none transition focus:border-ocean focus:ring-2 focus:ring-ocean/20"
-                value={form.constraint}
-                onChange={(event) => setForm({ ...form, constraint: event.target.value })}
+              <span className="mb-2 flex items-center gap-2 text-sm font-bold text-ink">
+                <FileText size={16} aria-hidden="true" />
+                Consultation Notes
+              </span>
+              <textarea
+                className="min-h-44 w-full resize-y rounded-md border border-ink/15 bg-paper px-3 py-3 text-sm leading-6 outline-none transition focus:border-ocean focus:ring-2 focus:ring-ocean/20"
+                placeholder="Persistent cough for 2 weeks. No fever. Chest clear on examination..."
+                required
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
               />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-sm font-bold text-ink">Idioma</span>
-              <select
-                className="h-11 w-full rounded-md border border-ink/15 bg-paper px-3 text-sm outline-none transition focus:border-ocean focus:ring-2 focus:ring-ocean/20"
-                value={form.language}
-                onChange={(event) => setForm({ ...form, language: event.target.value })}
-              >
-                <option value="espanol">Espanol</option>
-                <option value="english">English</option>
-              </select>
             </label>
 
             <button
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-coral px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#eb6545] disabled:cursor-not-allowed disabled:opacity-65"
-              disabled={!isLoaded || !isSignedIn || status === "loading"}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-ocean px-4 text-sm font-black text-white shadow-sm transition hover:bg-[#195f6d] disabled:cursor-not-allowed disabled:opacity-65"
+              disabled={!canSubmit}
               type="submit"
             >
-              {status === "loading" ? (
-                <Loader2 className="animate-spin" size={18} aria-hidden="true" />
-              ) : (
-                <RefreshCw size={18} aria-hidden="true" />
-              )}
-              Generar idea
+              {loading ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Mail size={18} aria-hidden="true" />}
+              {loading ? "Generating summary" : "Generate summary"}
             </button>
           </form>
         </div>
 
-        <div className="mt-8 grid grid-cols-3 gap-3 border-t border-ink/10 pt-5 text-center">
-          <div>
-            <div className="text-lg font-black text-ink">JWT</div>
-            <div className="text-xs font-semibold text-ink/50">auth</div>
-          </div>
-          <div>
-            <div className="text-lg font-black text-ink">PRO</div>
-            <div className="text-xs font-semibold text-ink/50">billing</div>
-          </div>
-          <div>
-            <div className="text-lg font-black text-ink">API</div>
-            <div className="text-xs font-semibold text-ink/50">FastAPI</div>
-          </div>
+        <div className="mt-8 border-t border-ink/10 pt-5 text-xs font-medium leading-5 text-ink/55">
+          Demonstration tool only. Do not use for diagnosis, treatment decisions, or storing protected health information.
         </div>
       </aside>
 
-      <section className="flex min-h-[calc(100vh-3rem)] flex-col rounded-lg border border-ink/10 bg-white/82 shadow-panel backdrop-blur">
+      <section className="flex min-h-[calc(100vh-3rem)] flex-col rounded-lg border border-ink/10 bg-white/84 shadow-panel backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink/10 px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-md bg-mint text-ink">
-              <Lightbulb size={20} aria-hidden="true" />
+              <Clipboard size={20} aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-ink">Nueva oportunidad</h2>
+              <h2 className="text-lg font-black text-ink">Consultation Output</h2>
               <p className="text-sm font-medium text-ink/55">
-                {status === "loading" ? "Generando en tiempo real" : "Lista para iterar"}
+                {loading ? "Streaming clinical summary" : "Summary, next steps, and patient email"}
               </p>
             </div>
           </div>
@@ -265,32 +254,28 @@ function IdeaGenerator() {
           <button
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-ink/15 bg-white px-3 text-sm font-bold text-ink transition hover:border-ocean hover:text-ocean disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!canCopy}
-            onClick={copyIdea}
+            onClick={copyOutput}
             type="button"
           >
             <Clipboard size={17} aria-hidden="true" />
-            {copied ? "Copiado" : "Copiar"}
+            {copied ? "Copied" : "Copy"}
           </button>
         </div>
 
         <div className="flex-1 overflow-auto px-5 py-6 md:px-8">
-          {status === "error" ? (
+          {errorMessage ? (
             <div className="rounded-md border border-coral/40 bg-coral/10 p-4 text-sm font-semibold text-ink">
-              {errorMessage || "No se pudo conectar con el generador."}
+              {errorMessage}
             </div>
-          ) : idea ? (
+          ) : output ? (
             <article className="markdown-content max-w-3xl text-[15px] leading-7 text-ink/82">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{idea}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{output}</ReactMarkdown>
             </article>
           ) : (
             <div className="flex h-full min-h-80 items-center justify-center">
-              <div className="flex items-center gap-3 rounded-md border border-ink/10 bg-paper px-4 py-3 text-sm font-bold text-ink/60">
-                {status === "loading" ? (
-                  <Loader2 className="animate-spin text-ocean" size={18} aria-hidden="true" />
-                ) : (
-                  <Sparkles className="text-ocean" size={18} aria-hidden="true" />
-                )}
-                {status === "loading" ? "Preparando concepto" : "Ajusta los campos y genera una idea"}
+              <div className="flex max-w-md items-center gap-3 rounded-md border border-ink/10 bg-paper px-4 py-3 text-sm font-bold text-ink/60">
+                {loading ? <Loader2 className="animate-spin text-ocean" size={18} aria-hidden="true" /> : <Stethoscope className="text-ocean" size={18} aria-hidden="true" />}
+                Enter consultation notes to generate a record summary, action items, and patient-friendly email.
               </div>
             </div>
           )}
@@ -304,22 +289,22 @@ export default function Product() {
   return (
     <>
       <Head>
-        <title>IdeaForge AI | Premium</title>
+        <title>MediNotes Pro | Consultation Assistant</title>
       </Head>
       <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#b8f2d0_0,#f7f4ee_34%,#ffffff_100%)]">
         <SignedOut>
           <section className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center justify-center px-5 py-12 text-center">
-            <div className="mb-6 grid h-14 w-14 place-items-center rounded-md bg-ink text-white">
-              <Sparkles size={26} aria-hidden="true" />
+            <div className="mb-6 grid h-14 w-14 place-items-center rounded-md bg-ocean text-white">
+              <Stethoscope size={26} aria-hidden="true" />
             </div>
-            <h1 className="text-4xl font-black tracking-normal text-ink md:text-5xl">IdeaForge AI</h1>
+            <h1 className="text-4xl font-black tracking-normal text-ink md:text-5xl">MediNotes Pro</h1>
             <p className="mt-4 max-w-xl text-base font-medium leading-7 text-ink/64 md:text-lg">
-              Inicia sesion para elegir tu plan y acceder al generador premium.
+              Sign in to choose your plan and access the consultation assistant.
             </p>
             <SignInButton mode="modal">
-              <button className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-coral px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#eb6545]">
+              <button className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-ocean px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#195f6d]">
                 <LogIn size={18} aria-hidden="true" />
-                Iniciar sesion
+                Sign in
               </button>
             </SignInButton>
           </section>
@@ -327,7 +312,7 @@ export default function Product() {
 
         <SignedIn>
           <Protect plan="premium_subscription" fallback={<SubscriptionFallback />}>
-            <IdeaGenerator />
+            <ConsultationForm />
           </Protect>
         </SignedIn>
       </main>

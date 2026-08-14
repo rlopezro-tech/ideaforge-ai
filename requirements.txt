@@ -1,5 +1,6 @@
 fastapi==0.115.8
 fastapi-clerk-auth
 openai==1.61.1
+pydantic
 python-dotenv
 uvicorn==0.34.0

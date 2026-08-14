@@ -2,11 +2,11 @@ import { Head, Html, Main, NextScript } from "next/document";
 
 export default function Document() {
   return (
-    <Html lang="es">
+    <Html lang="en">
       <Head>
         <meta
           name="description"
-          content="Generador de ideas SaaS con inteligencia artificial y streaming en tiempo real."
+          content="AI-powered medical consultation summaries for healthcare professionals."
         />
       </Head>
       <body>

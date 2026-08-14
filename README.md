@@ -2,7 +2,8 @@
 
 IdeaForge AI is a full-stack AI SaaS starter inspired by `production/week1/day2.md`.
 It generates structured SaaS business ideas through a Next.js frontend and a FastAPI
-streaming backend.
+streaming backend. The app now includes Clerk authentication and Clerk Billing
+subscription gating for premium access.
 
 ## Stack
 
@@ -10,6 +11,8 @@ streaming backend.
 - TypeScript
 - Tailwind CSS
 - FastAPI
+- Clerk authentication
+- Clerk Billing
 - OpenAI streaming responses
 - Markdown rendering
 
@@ -20,8 +23,9 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Add your OpenAI key to `.env.local` if you want real model responses. Without the
-key, the backend streams a local fallback response so the UI remains testable.
+Add your OpenAI and Clerk keys to `.env.local`. Without `OPENAI_API_KEY`, the backend
+streams a local fallback response so the UI remains testable. Clerk auth and billing
+require real Clerk development keys.
 
 For Vercel-style local testing:
 
@@ -37,7 +41,7 @@ npm run api
 ```
 
 ```bash
-API_BASE_URL=http://127.0.0.1:8000 npm run dev
+npm run dev
 ```
 
 For frontend-only work without the Python API:
@@ -51,8 +55,16 @@ npm run dev
 ```bash
 vercel link
 vercel env add OPENAI_API_KEY
+vercel env add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+vercel env add CLERK_SECRET_KEY
+vercel env add CLERK_JWKS_URL
+vercel env add API_BASE_URL
 vercel --prod
 ```
+
+## Week 1 Activities
+
+- [Day 3 Part 2: Clerk Billing](docs/week1/day3-part2.md)
 
 ## Notes
 

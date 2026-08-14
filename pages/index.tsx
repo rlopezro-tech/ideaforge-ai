@@ -3,7 +3,7 @@
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Head from "next/head";
 import Link from "next/link";
-import { ArrowRight, LogIn, Sparkles } from "lucide-react";
+import { ArrowRight, Check, LogIn, Sparkles } from "lucide-react";
 
 export default function Home() {
   return (
@@ -20,7 +20,7 @@ export default function Home() {
               </span>
               <span>
                 <span className="block text-2xl font-black tracking-normal text-ink">IdeaForge AI</span>
-                <span className="block text-sm font-medium text-ink/58">SaaS concepts, streamed</span>
+                <span className="block text-sm font-medium text-ink/58">Premium SaaS concepts</span>
               </span>
             </Link>
 
@@ -42,7 +42,7 @@ export default function Home() {
                   Abrir app
                   <ArrowRight size={17} aria-hidden="true" />
                 </Link>
-                <UserButton afterSignOutUrl="/" />
+                <UserButton showName afterSignOutUrl="/" />
               </div>
             </SignedIn>
           </nav>
@@ -56,12 +56,36 @@ export default function Home() {
                 Genera oportunidades SaaS con IA, ajusta audiencia, industria y restricciones, y recibe una propuesta estructurada en Markdown.
               </p>
 
+              <div className="mt-7 w-full max-w-sm rounded-lg border border-ink/10 bg-white/86 p-5 shadow-panel backdrop-blur">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-black text-ink">Premium Subscription</h2>
+                    <p className="mt-1 text-sm font-medium text-ink/56">Ideas ilimitadas para builders.</p>
+                  </div>
+                  <div className="rounded-md bg-mint px-3 py-1 text-xs font-black text-ink">PRO</div>
+                </div>
+
+                <div className="mt-5 flex items-end gap-1">
+                  <span className="text-4xl font-black text-ink">$10</span>
+                  <span className="pb-1 text-sm font-bold text-ink/50">/mes</span>
+                </div>
+
+                <ul className="mt-5 space-y-3 text-sm font-semibold text-ink/70">
+                  {["Generacion ilimitada", "Modelos avanzados de IA", "Soporte prioritario"].map((feature) => (
+                    <li className="flex items-center gap-2" key={feature}>
+                      <Check className="text-ocean" size={17} aria-hidden="true" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               <div className="mt-8 flex flex-wrap gap-3">
                 <SignedOut>
                   <SignInButton mode="modal">
                     <button className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-coral px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#eb6545]">
                       <LogIn size={18} aria-hidden="true" />
-                      Empezar gratis
+                      Probar premium
                     </button>
                   </SignInButton>
                 </SignedOut>
@@ -71,7 +95,7 @@ export default function Home() {
                     className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-coral px-5 text-sm font-black text-white shadow-sm transition hover:bg-[#eb6545]"
                     href="/product"
                   >
-                    Generar ideas
+                    Acceder a premium
                     <ArrowRight size={18} aria-hidden="true" />
                   </Link>
                 </SignedIn>
@@ -82,9 +106,9 @@ export default function Home() {
               <div className="mb-4 flex items-center justify-between border-b border-ink/10 pb-4">
                 <div>
                   <h2 className="text-lg font-black text-ink">Vista del producto</h2>
-                  <p className="text-sm font-medium text-ink/55">Protegido con Clerk</p>
+                  <p className="text-sm font-medium text-ink/55">Protegido con Clerk Billing</p>
                 </div>
-                <div className="rounded-md bg-mint px-3 py-1 text-xs font-black text-ink">JWT</div>
+                <div className="rounded-md bg-mint px-3 py-1 text-xs font-black text-ink">PRO</div>
               </div>
 
               <div className="space-y-3">

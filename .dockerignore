@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.env
+.env.local
+.git
+.venv
+.vercel
+*.log
+*.pyc
+__pycache__
+*.tsbuildinfo
+README.md
+.DS_Store

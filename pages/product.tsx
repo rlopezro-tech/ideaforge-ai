@@ -106,7 +106,7 @@ function ConsultationForm() {
         return;
       }
 
-      await fetchEventSource("/api", {
+      await fetchEventSource("/api/consultation", {
         method: "POST",
         signal: controller.signal,
         headers: {
